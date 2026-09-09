@@ -56,6 +56,7 @@ def parse(md_text):
             if cur:
                 items.append(cur)
             head = line[3:].strip()
+            head = re.sub(r"^\d+\.\s*", "", head)               # свой номер: нумеруем заново
             head = re.sub(r"\s*·\s*\[[^\]]*\]\s*$", "", head)  # тег темы
             cur = {"head": head, "paras": [], "note": None, "sources": [], "photo": None, "video": None}
             continue
@@ -83,7 +84,7 @@ def parse(md_text):
 
 def parse_links(text):
     """'URL · доп.: URL · стенограмма: URL' -> [(подпись, url), ...]."""
-    out = []
+    out, seen = [], {}
     for token in re.split(r"\s+·\s+", text.strip()):
         m = URL_RE.search(token)
         if not m:
@@ -92,6 +93,9 @@ def parse_links(text):
         label = token[: m.start()].strip(" :—-–")
         if label.lower() in ("", "доп.", "доп"):
             label = host(url)
+            seen[label] = seen.get(label, 0) + 1
+            if seen[label] > 1:                      # второй и далее источник с того же сайта
+                label = f"{label} ({seen[label]})"
         out.append((label, url))
     return out
 

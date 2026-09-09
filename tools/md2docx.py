@@ -161,8 +161,11 @@ def fetch_image(url, timeout=25):
 
 
 def is_headline_card(url, data):
-    """Интерфакс для статей без фото отдаёт по /aspimg/ картинку 700×350 с логотипом и
-    заголовком. Это не фото, в документ такое не вставляем."""
+    """Карточки с логотипом и заголовком вместо фото — в документ не вставляем.
+    РИА: любой адрес вида img.ria.ru/images/sharing/... Интерфакс: /aspimg/<id>.jpg
+    размером 700×350 (для статей с фото по тому же адресу лежит нормальная картинка)."""
+    if "img.ria.ru/images/sharing/" in url:
+        return True
     if "interfax.ru/aspimg/" not in url:
         return False
     try:

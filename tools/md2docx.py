@@ -14,6 +14,7 @@ import argparse
 import io
 import re
 import sys
+import time
 import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
@@ -142,11 +143,22 @@ def small_run(paragraph, text):
     return run
 
 
-def fetch_image(url, timeout=25):
+def fetch_image(url, timeout=25, attempts=3):
     req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        ctype = resp.headers.get("Content-Type", "")
-        data = resp.read()
+    last_exc = None
+    for attempt in range(attempts):                      # сети РИА и Коммерсанта отвечают нестабильно
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                ctype = resp.headers.get("Content-Type", "")
+                data = resp.read()
+            if data:
+                break
+            last_exc = ValueError("пустой ответ")
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+        time.sleep(2 * (attempt + 1))
+    else:
+        raise last_exc
     is_image = (
         data[:3] == b"\xff\xd8\xff"          # JPEG
         or data[:8] == b"\x89PNG\r\n\x1a\n"  # PNG
@@ -157,7 +169,24 @@ def fetch_image(url, timeout=25):
         raise ValueError(f"not an image (Content-Type: {ctype or 'нет'}, начало: {data[:12]!r})")
     if is_headline_card(url, data):
         raise ValueError("карточка с заголовком, а не фото")
-    return data
+    return normalize_image(data)
+
+
+def normalize_image(data, max_width=1600):
+    """Перекодирует картинку в обычный JPEG с JFIF-заголовком и ужимает по ширине.
+    python-docx не распознаёт JPEG без JFIF/Exif (так отдаёт, например, РИА)."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return data
+    im = Image.open(io.BytesIO(data))
+    if im.mode not in ("RGB", "L"):
+        im = im.convert("RGB")
+    if im.width > max_width:
+        im = im.resize((max_width, round(im.height * max_width / im.width)))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=88)
+    return buf.getvalue()
 
 
 def is_headline_card(url, data):

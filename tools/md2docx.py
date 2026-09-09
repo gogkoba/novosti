@@ -155,7 +155,21 @@ def fetch_image(url, timeout=25):
     )
     if not is_image:
         raise ValueError(f"not an image (Content-Type: {ctype or 'нет'}, начало: {data[:12]!r})")
+    if is_headline_card(url, data):
+        raise ValueError("карточка с заголовком, а не фото")
     return data
+
+
+def is_headline_card(url, data):
+    """Интерфакс для статей без фото отдаёт по /aspimg/ картинку 700×350 с логотипом и
+    заголовком. Это не фото, в документ такое не вставляем."""
+    if "interfax.ru/aspimg/" not in url:
+        return False
+    try:
+        from PIL import Image
+        return Image.open(io.BytesIO(data)).size == (700, 350)
+    except Exception:  # noqa: BLE001 — нет PIL или битый файл: считаем, что это фото
+        return False
 
 
 def build(title, items, out_path, with_images=True, log=print):
